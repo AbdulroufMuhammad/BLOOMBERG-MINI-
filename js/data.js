@@ -11,7 +11,11 @@ export async function fetchWithProxy(url) {
                 headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, */*' }
             });
             if (response.ok) {
-                return await response.text();
+                const text = await response.text();
+                // Check if response is valid (not an error page)
+                if (text && !text.includes('<!DOCTYPE html>') && !text.includes('error code:')) {
+                    return text;
+                }
             }
         } catch (e) {
             console.log(`Proxy ${i} failed, trying next...`);
@@ -20,14 +24,44 @@ export async function fetchWithProxy(url) {
     throw new Error('All proxies failed');
 }
 
+// Fetch RSS feed using rss2json API as primary method
+export async function fetchFeedViaJson(source) {
+    try {
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`;
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error('rss2json API failed');
+
+        const data = await response.json();
+        if (data.status !== 'ok' || !data.items) return [];
+
+        return data.items.slice(0, 5).map(item => ({
+            source: source.name,
+            title: (item.title || 'No title').trim(),
+            link: item.link || '',
+            pubDate: item.pubDate || '',
+            isAlert: hasAlertKeyword(item.title || '')
+        }));
+    } catch (e) {
+        console.log(`rss2json failed for ${source.name}, trying XML proxy...`);
+        return null; // Signal to try XML fallback
+    }
+}
+
 // Check for alert keywords
 export function hasAlertKeyword(title) {
     const lower = title.toLowerCase();
     return ALERT_KEYWORDS.some(kw => lower.includes(kw));
 }
 
-// Parse RSS feed
+// Parse RSS feed - tries rss2json API first, then falls back to XML proxy
 export async function fetchFeed(source) {
+    // Try rss2json API first (more reliable)
+    const jsonResult = await fetchFeedViaJson(source);
+    if (jsonResult !== null && jsonResult.length > 0) {
+        return jsonResult;
+    }
+
+    // Fallback to XML proxy
     try {
         const text = await fetchWithProxy(source.url);
         const parser = new DOMParser();
@@ -268,6 +302,26 @@ export async function fetchGovContracts() {
 // Fetch AI news from major AI companies
 export async function fetchAINews() {
     const results = await Promise.all(AI_FEEDS.map(async (source) => {
+        // Try rss2json API first
+        try {
+            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`;
+            const response = await fetch(apiUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'ok' && data.items) {
+                    return data.items.slice(0, 3).map(item => ({
+                        source: source.name,
+                        title: (item.title || 'No title').trim(),
+                        link: item.link || '',
+                        date: item.pubDate || ''
+                    }));
+                }
+            }
+        } catch (e) {
+            // Fall through to XML proxy
+        }
+
+        // Fallback to XML proxy
         try {
             const text = await fetchWithProxy(source.url);
             const parser = new DOMParser();
