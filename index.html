@@ -82,12 +82,16 @@
         <section class="panel" data-panel="map" style="grid-column: span 4;">
             <div class="panel-header">
                 <span class="panel-title">Global Activity Monitor</span>
-                <span class="panel-count" id="mapLegend">
+                <span class="panel-count" id="mapLegend" style="font-size: 9px;">
                     <span style="color: #00ff88;">● Low</span>
-                    <span style="color: #ffcc00; margin-left: 0.5rem;">● Elevated</span>
-                    <span style="color: #ff4444; margin-left: 0.5rem;">● High</span>
-                    <span style="color: #ff6600; margin-left: 0.5rem;">▲ Weather</span>
-                    <span style="color: #ff8800; margin-left: 0.5rem;">◉ Quake</span>
+                    <span style="color: #ffcc00; margin-left: 0.4rem;">● Elevated</span>
+                    <span style="color: #ff4444; margin-left: 0.4rem;">● High</span>
+                    <span style="color: #ff6600; margin-left: 0.4rem;">▲ Wx</span>
+                    <span style="color: #ff8800; margin-left: 0.4rem;">◉ Quake</span>
+                    <span style="color: #00aaff; margin-left: 0.4rem;">◆ Ship</span>
+                    <span style="color: #aa44ff; margin-left: 0.4rem;">◎ Cable</span>
+                    <span style="color: #ffff00; margin-left: 0.4rem;">☢ Nuke</span>
+                    <span style="color: #ff00ff; margin-left: 0.4rem;">★ Base</span>
                 </span>
             </div>
             <div class="panel-content" id="mapPanel" style="max-height: none; height: 550px; overflow: hidden; background: #0a1a14; position: relative;">
@@ -142,15 +146,270 @@
                         const world = await response.json();
                         const countries = topojson.feature(world, world.objects.countries);
 
-                        // Draw countries
-                        svg.selectAll('path')
+                        // Sanctioned countries (ISO numeric codes)
+                        const sanctionedIds = [364, 408, 760, 862, 112, 643, 728, 729]; // Iran, NK, Syria, Venezuela, Belarus, Russia, South Sudan, Sudan
+
+                        // Draw countries with sanctions highlighting
+                        svg.selectAll('path.country')
                             .data(countries.features)
                             .enter()
                             .append('path')
+                            .attr('class', 'country')
                             .attr('d', path)
-                            .attr('fill', '#0f3028')
-                            .attr('stroke', '#1a5040')
+                            .attr('fill', d => sanctionedIds.includes(+d.id) ? '#2a1a1a' : '#0f3028')
+                            .attr('stroke', d => sanctionedIds.includes(+d.id) ? '#4a2020' : '#1a5040')
                             .attr('stroke-width', 0.5);
+
+                        // Draw graticule (grid lines)
+                        const graticule = d3.geoGraticule().step([30, 30]);
+                        svg.append('path')
+                            .datum(graticule)
+                            .attr('d', path)
+                            .attr('fill', 'none')
+                            .attr('stroke', '#1a3830')
+                            .attr('stroke-width', 0.3)
+                            .attr('stroke-dasharray', '2,2');
+
+                        // Ocean labels
+                        const oceans = [
+                            { name: 'ATLANTIC', lat: 25, lon: -40 },
+                            { name: 'PACIFIC', lat: 0, lon: -150 },
+                            { name: 'INDIAN', lat: -20, lon: 75 },
+                            { name: 'ARCTIC', lat: 75, lon: 0 },
+                            { name: 'SOUTHERN', lat: -60, lon: 0 }
+                        ];
+                        oceans.forEach(o => {
+                            const [x, y] = projection([o.lon, o.lat]);
+                            if (x && y) {
+                                svg.append('text')
+                                    .attr('x', x).attr('y', y)
+                                    .attr('fill', '#1a4a40')
+                                    .attr('font-size', '10px')
+                                    .attr('font-family', 'monospace')
+                                    .attr('text-anchor', 'middle')
+                                    .attr('opacity', 0.6)
+                                    .text(o.name);
+                            }
+                        });
+
+                        // Day/night terminator
+                        const now = new Date();
+                        const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+                        const declination = -23.45 * Math.cos((360/365) * (dayOfYear + 10) * Math.PI/180);
+                        const hourAngle = (now.getUTCHours() + now.getUTCMinutes()/60) * 15 - 180;
+
+                        const terminatorPoints = [];
+                        for (let lat = -90; lat <= 90; lat += 2) {
+                            const cosLat = Math.cos(lat * Math.PI/180);
+                            const tanDec = Math.tan(declination * Math.PI/180);
+                            const tanLat = Math.tan(lat * Math.PI/180);
+                            let lon = -hourAngle + Math.acos(-tanDec * tanLat) * 180/Math.PI;
+                            if (isNaN(lon)) lon = (lat * declination > 0) ? -hourAngle + 180 : -hourAngle;
+                            terminatorPoints.push([lon, lat]);
+                        }
+                        for (let lat = 90; lat >= -90; lat -= 2) {
+                            const cosLat = Math.cos(lat * Math.PI/180);
+                            const tanDec = Math.tan(declination * Math.PI/180);
+                            const tanLat = Math.tan(lat * Math.PI/180);
+                            let lon = -hourAngle - Math.acos(-tanDec * tanLat) * 180/Math.PI;
+                            if (isNaN(lon)) lon = (lat * declination > 0) ? -hourAngle - 180 : -hourAngle;
+                            terminatorPoints.push([lon, lat]);
+                        }
+
+                        svg.append('path')
+                            .datum({type: 'Polygon', coordinates: [terminatorPoints]})
+                            .attr('d', path)
+                            .attr('fill', 'rgba(0,0,0,0.3)')
+                            .attr('stroke', 'none');
+
+                        // Conflict zones (approximate bounding boxes)
+                        const conflictZones = [
+                            { name: 'Ukraine', coords: [[30,52],[40,52],[40,45],[30,45],[30,52]], color: '#ff4444' },
+                            { name: 'Gaza', coords: [[34,32],[35,32],[35,31],[34,31],[34,32]], color: '#ff4444' },
+                            { name: 'Yemen', coords: [[42,19],[54,19],[54,12],[42,12],[42,19]], color: '#ff6644' },
+                            { name: 'Sudan', coords: [[22,23],[38,23],[38,8],[22,8],[22,23]], color: '#ff6644' },
+                            { name: 'Myanmar', coords: [[92,28],[101,28],[101,10],[92,10],[92,28]], color: '#ff8844' }
+                        ];
+                        conflictZones.forEach(zone => {
+                            svg.append('path')
+                                .datum({type: 'Polygon', coordinates: [zone.coords]})
+                                .attr('d', path)
+                                .attr('fill', zone.color)
+                                .attr('fill-opacity', 0.15)
+                                .attr('stroke', zone.color)
+                                .attr('stroke-width', 0.5)
+                                .attr('stroke-opacity', 0.4);
+                        });
+
+                        // Shipping chokepoints
+                        const chokepoints = [
+                            { name: 'Suez', lat: 30.0, lon: 32.5, desc: 'Suez Canal — 12% of global trade, Europe-Asia route' },
+                            { name: 'Panama', lat: 9.1, lon: -79.7, desc: 'Panama Canal — Americas transit, Pacific-Atlantic link' },
+                            { name: 'Hormuz', lat: 26.5, lon: 56.5, desc: 'Strait of Hormuz — 21% of global oil, Persian Gulf exit' },
+                            { name: 'Malacca', lat: 2.5, lon: 101.0, desc: 'Strait of Malacca — 25% of global trade, China supply line' },
+                            { name: 'Bab el-M', lat: 12.5, lon: 43.3, desc: 'Bab el-Mandeb — Red Sea gateway, Houthi threat zone' },
+                            { name: 'Gibraltar', lat: 36.0, lon: -5.5, desc: 'Strait of Gibraltar — Mediterranean access' },
+                            { name: 'Bosporus', lat: 41.1, lon: 29.0, desc: 'Bosporus Strait — Black Sea access, Russia exports' }
+                        ];
+                        chokepoints.forEach(cp => {
+                            const [x, y] = projection([cp.lon, cp.lat]);
+                            if (x && y) {
+                                svg.append('rect')
+                                    .attr('x', x - 4).attr('y', y - 4)
+                                    .attr('width', 8).attr('height', 8)
+                                    .attr('fill', '#00aaff')
+                                    .attr('opacity', 0.8)
+                                    .attr('transform', `rotate(45,${x},${y})`);
+                                svg.append('text')
+                                    .attr('x', x + 8).attr('y', y + 3)
+                                    .attr('fill', '#00aaff')
+                                    .attr('font-size', '7px')
+                                    .attr('font-family', 'monospace')
+                                    .text(cp.name);
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 10)
+                                    .attr('fill', 'transparent')
+                                    .attr('class', 'hotspot-hit')
+                                    .on('mouseenter', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.innerHTML = `<strong style="color:#00aaff">⬥ ${cp.desc}</strong>`;
+                                        tooltip.style.display = 'block';
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mousemove', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mouseleave', () => tooltip.style.display = 'none');
+                            }
+                        });
+
+                        // Undersea cable landing points (major hubs)
+                        const cableLandings = [
+                            { name: 'NYC', lat: 40.7, lon: -74.0, desc: 'New York — Transatlantic hub, 10+ cables' },
+                            { name: 'Cornwall', lat: 50.1, lon: -5.5, desc: 'Cornwall UK — Europe-Americas gateway' },
+                            { name: 'Marseille', lat: 43.3, lon: 5.4, desc: 'Marseille — Mediterranean hub, SEA-ME-WE' },
+                            { name: 'Mumbai', lat: 19.1, lon: 72.9, desc: 'Mumbai — India gateway, 10+ cables' },
+                            { name: 'Singapore', lat: 1.3, lon: 103.8, desc: 'Singapore — Asia-Pacific nexus' },
+                            { name: 'Hong Kong', lat: 22.3, lon: 114.2, desc: 'Hong Kong — China connectivity hub' },
+                            { name: 'Tokyo', lat: 35.5, lon: 139.8, desc: 'Tokyo — Trans-Pacific terminus' },
+                            { name: 'Sydney', lat: -33.9, lon: 151.2, desc: 'Sydney — Australia/Pacific hub' },
+                            { name: 'LA', lat: 33.7, lon: -118.2, desc: 'Los Angeles — Pacific gateway' },
+                            { name: 'Miami', lat: 25.8, lon: -80.2, desc: 'Miami — Americas/Caribbean hub' }
+                        ];
+                        cableLandings.forEach(cl => {
+                            const [x, y] = projection([cl.lon, cl.lat]);
+                            if (x && y) {
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 3)
+                                    .attr('fill', 'none')
+                                    .attr('stroke', '#aa44ff')
+                                    .attr('stroke-width', 1.5);
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 10)
+                                    .attr('fill', 'transparent')
+                                    .attr('class', 'hotspot-hit')
+                                    .on('mouseenter', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.innerHTML = `<strong style="color:#aa44ff">◎ ${cl.desc}</strong>`;
+                                        tooltip.style.display = 'block';
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mousemove', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mouseleave', () => tooltip.style.display = 'none');
+                            }
+                        });
+
+                        // Nuclear facilities (major sites)
+                        const nuclearSites = [
+                            { name: 'Natanz', lat: 33.7, lon: 51.7, desc: 'Natanz — Iran uranium enrichment' },
+                            { name: 'Yongbyon', lat: 39.8, lon: 125.8, desc: 'Yongbyon — North Korea nuclear complex' },
+                            { name: 'Dimona', lat: 31.0, lon: 35.1, desc: 'Dimona — Israel nuclear facility' },
+                            { name: 'Bushehr', lat: 28.8, lon: 50.9, desc: 'Bushehr — Iran nuclear power plant' },
+                            { name: 'Zaporizhzhia', lat: 47.5, lon: 34.6, desc: 'Zaporizhzhia — Europe largest NPP, conflict zone' },
+                            { name: 'Chernobyl', lat: 51.4, lon: 30.1, desc: 'Chernobyl — Exclusion zone, occupied 2022' },
+                            { name: 'Fukushima', lat: 37.4, lon: 141.0, desc: 'Fukushima — Decommissioning site' }
+                        ];
+                        nuclearSites.forEach(ns => {
+                            const [x, y] = projection([ns.lon, ns.lat]);
+                            if (x && y) {
+                                // Radiation symbol (simplified)
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 2)
+                                    .attr('fill', '#ffff00');
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 5)
+                                    .attr('fill', 'none')
+                                    .attr('stroke', '#ffff00')
+                                    .attr('stroke-width', 1)
+                                    .attr('stroke-dasharray', '3,3');
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 10)
+                                    .attr('fill', 'transparent')
+                                    .attr('class', 'hotspot-hit')
+                                    .on('mouseenter', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.innerHTML = `<strong style="color:#ffff00">☢ ${ns.desc}</strong>`;
+                                        tooltip.style.display = 'block';
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mousemove', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mouseleave', () => tooltip.style.display = 'none');
+                            }
+                        });
+
+                        // Major military bases
+                        const militaryBases = [
+                            { name: 'Ramstein', lat: 49.4, lon: 7.6, desc: 'Ramstein — US Air Force, NATO hub Germany' },
+                            { name: 'Diego Garcia', lat: -7.3, lon: 72.4, desc: 'Diego Garcia — US/UK Indian Ocean base' },
+                            { name: 'Okinawa', lat: 26.5, lon: 127.9, desc: 'Okinawa — US Forces Japan, Pacific presence' },
+                            { name: 'Guam', lat: 13.5, lon: 144.8, desc: 'Guam — US Pacific Command, bomber base' },
+                            { name: 'Djibouti', lat: 11.5, lon: 43.1, desc: 'Djibouti — US/China/France bases, Horn of Africa' },
+                            { name: 'Qatar', lat: 25.1, lon: 51.3, desc: 'Al Udeid — US CENTCOM forward HQ' },
+                            { name: 'Kaliningrad', lat: 54.7, lon: 20.5, desc: 'Kaliningrad — Russian Baltic exclave, missiles' },
+                            { name: 'Sevastopol', lat: 44.6, lon: 33.5, desc: 'Sevastopol — Russian Black Sea Fleet' },
+                            { name: 'Hainan', lat: 18.2, lon: 109.5, desc: 'Hainan — Chinese submarine base, South China Sea' }
+                        ];
+                        militaryBases.forEach(mb => {
+                            const [x, y] = projection([mb.lon, mb.lat]);
+                            if (x && y) {
+                                // Star shape for military
+                                const starPath = `M${x},${y-5} L${x+1.5},${y-1.5} L${x+5},${y-1.5} L${x+2.5},${y+1} L${x+3.5},${y+5} L${x},${y+2.5} L${x-3.5},${y+5} L${x-2.5},${y+1} L${x-5},${y-1.5} L${x-1.5},${y-1.5} Z`;
+                                svg.append('path')
+                                    .attr('d', starPath)
+                                    .attr('fill', '#ff00ff')
+                                    .attr('opacity', 0.8);
+                                svg.append('circle')
+                                    .attr('cx', x).attr('cy', y).attr('r', 10)
+                                    .attr('fill', 'transparent')
+                                    .attr('class', 'hotspot-hit')
+                                    .on('mouseenter', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.innerHTML = `<strong style="color:#ff00ff">★ ${mb.desc}</strong>`;
+                                        tooltip.style.display = 'block';
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mousemove', function(event) {
+                                        const rect = mapPanel.getBoundingClientRect();
+                                        tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
+                                        tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+                                    })
+                                    .on('mouseleave', () => tooltip.style.display = 'none');
+                            }
+                        });
 
                         // Add pulse animation style
                         const style = document.createElement('style');
