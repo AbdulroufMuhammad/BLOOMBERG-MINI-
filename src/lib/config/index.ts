@@ -36,3 +36,15 @@ export {
 	type SectorConfig,
 	type CommodityConfig
 } from './markets';
+
+// Analysis configuration
+export {
+	CORRELATION_TOPICS,
+	NARRATIVE_PATTERNS,
+	SOURCE_TYPES,
+	PERSON_PATTERNS,
+	type CorrelationTopic,
+	type NarrativePattern,
+	type SourceTypes,
+	type PersonPattern
+} from './analysis';

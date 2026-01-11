@@ -1,24 +1,28 @@
 // Core data types for Situation Monitor
 
 /**
- * A news item from any source (RSS, GDELT, etc.)
- */
-export interface NewsItem {
-	title: string;
-	link: string;
-	pubDate: string;
-	description?: string;
-	content?: string;
-	source: string;
-	category?: string;
-	isAlert?: boolean;
-	alertKeyword?: string;
-}
-
-/**
  * News feed category
  */
 export type NewsCategory = 'politics' | 'tech' | 'finance' | 'gov' | 'ai' | 'intel';
+
+/**
+ * A news item from any source (RSS, GDELT, etc.)
+ */
+export interface NewsItem {
+	id: string;
+	title: string;
+	link: string;
+	pubDate?: string;
+	timestamp: number;
+	description?: string;
+	content?: string;
+	source: string;
+	category: NewsCategory;
+	isAlert?: boolean;
+	alertKeyword?: string;
+	region?: string;
+	topics?: string[];
+}
 
 /**
  * RSS feed configuration
@@ -38,7 +42,32 @@ export interface MarketItem {
 	price: number;
 	change: number;
 	changePercent: number;
-	type: 'stock' | 'crypto' | 'commodity' | 'index';
+	type?: 'stock' | 'crypto' | 'commodity' | 'index';
+}
+
+/**
+ * Sector performance data (ETFs like XLK, XLF, etc.)
+ */
+export interface SectorPerformance {
+	symbol: string;
+	name: string;
+	price: number;
+	change: number;
+	changePercent: number;
+}
+
+/**
+ * Cryptocurrency data from CoinGecko
+ */
+export interface CryptoItem {
+	id: string;
+	symbol: string;
+	name: string;
+	current_price: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap?: number;
+	volume_24h?: number;
 }
 
 /**
@@ -156,14 +185,16 @@ export interface CustomMonitor {
 	id: string;
 	name: string;
 	keywords: string[];
-	color: string;
+	enabled: boolean;
+	color?: string;
 	location?: {
 		name: string;
 		lat: number;
 		lon: number;
 	};
 	createdAt: number;
-	updatedAt: number;
+	updatedAt?: number;
+	matchCount: number;
 }
 
 /**
