@@ -413,7 +413,6 @@
 
 	.map-slot {
 		grid-column: 1 / -1;
-		min-height: 300px;
 	}
 
 	@media (max-width: 768px) {

@@ -26,8 +26,10 @@
 
 <header class="header">
 	<div class="header-left">
-		<h1 class="logo">SITUATION MONITOR</h1>
-		<span class="version">v2.0</span>
+		<h1 class="logo">
+			SITUATION MONITOR
+			<span class="version">2.0</span>
+		</h1>
 	</div>
 
 	<div class="header-center">
@@ -79,12 +81,13 @@
 		position: sticky;
 		top: 0;
 		z-index: 100;
+		gap: 1rem;
 	}
 
 	.header-left {
 		display: flex;
 		align-items: baseline;
-		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.logo {
@@ -93,16 +96,25 @@
 		letter-spacing: 0.1em;
 		color: var(--text-primary);
 		margin: 0;
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
 	}
 
 	.version {
-		font-size: 0.6rem;
+		font-size: 0.5rem;
+		font-weight: 500;
 		color: var(--text-muted);
+		opacity: 0.5;
+		vertical-align: super;
 	}
 
 	.header-center {
 		display: flex;
 		align-items: center;
+		flex: 1;
+		justify-content: center;
+		min-width: 0;
 	}
 
 	.refresh-status {
@@ -112,8 +124,11 @@
 	}
 
 	.status-text {
-		font-size: 0.65rem;
-		color: var(--text-secondary);
+		font-size: 0.6rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.status-text.loading {
@@ -124,6 +139,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.header-btn {

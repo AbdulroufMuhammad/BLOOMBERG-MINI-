@@ -27,6 +27,7 @@
 	.dashboard-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		grid-auto-rows: min-content;
 		gap: 0.5rem;
 		max-width: 2000px;
 		margin: 0 auto;
@@ -35,18 +36,21 @@
 	@media (min-width: 1200px) {
 		.dashboard-grid {
 			grid-template-columns: repeat(4, 1fr);
+			grid-auto-rows: min-content;
 		}
 	}
 
 	@media (min-width: 1600px) {
 		.dashboard-grid {
 			grid-template-columns: repeat(5, 1fr);
+			grid-auto-rows: min-content;
 		}
 	}
 
 	@media (min-width: 2000px) {
 		.dashboard-grid {
 			grid-template-columns: repeat(6, 1fr);
+			grid-auto-rows: min-content;
 		}
 	}
 </style>
